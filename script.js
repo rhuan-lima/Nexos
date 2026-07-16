@@ -8,18 +8,18 @@ const CONFIG = {
   displayPhone: "(81) 98853-0483",
 };
 
+const SECTION_IDS = ["servicos", "diferenciais", "area", "contato"];
+
 function onlyDigits(value) {
   return String(value || "").replace(/\D+/g, "");
 }
 
 function buildWhatsAppUrl(numberDigits, text) {
-  const base = "https://wa.me/";
-  const msg = encodeURIComponent(text);
-  return `${base}${numberDigits}?text=${msg}`;
+  return `https://wa.me/${numberDigits}?text=${encodeURIComponent(text)}`;
 }
 
 function getContextMessage({ name, phone, message }) {
-  const lines = [
+  return [
     "Olá! Gostaria de um orçamento com a Nexus Projetos e Instalações.",
     "",
     `Nome: ${name}`,
@@ -29,8 +29,7 @@ function getContextMessage({ name, phone, message }) {
     message,
     "",
     "Atendimento: Recife e Região Metropolitana.",
-  ];
-  return lines.join("\n");
+  ].join("\n");
 }
 
 function setupYear() {
@@ -80,8 +79,7 @@ function setupMobileNav() {
   };
 
   toggle.addEventListener("click", () => {
-    const isOpen = nav.classList.contains("nav--open");
-    if (isOpen) close();
+    if (nav.classList.contains("nav--open")) close();
     else open();
   });
 
@@ -102,6 +100,47 @@ function setupMobileNav() {
     if (!(target instanceof Node)) return;
     if (!nav.contains(target)) close();
   });
+}
+
+function setupActiveNavLink() {
+  const navLinks = document.querySelectorAll("[data-nav-link]");
+  const sections = SECTION_IDS.map((id) => document.getElementById(id)).filter(Boolean);
+  if (!navLinks.length || !sections.length) return;
+
+  const setActive = (id) => {
+    navLinks.forEach((link) => {
+      const href = link.getAttribute("href");
+      const isActive = href === `#${id}`;
+      if (isActive) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  };
+
+  if (!("IntersectionObserver" in window)) return;
+
+  const visible = new Map();
+
+  const io = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        visible.set(entry.target.id, entry.intersectionRatio);
+      });
+
+      let bestId = null;
+      let bestRatio = 0;
+      visible.forEach((ratio, id) => {
+        if (ratio > bestRatio) {
+          bestRatio = ratio;
+          bestId = id;
+        }
+      });
+
+      if (bestId) setActive(bestId);
+    },
+    { rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.1, 0.25, 0.5] }
+  );
+
+  sections.forEach((section) => io.observe(section));
 }
 
 function setupRevealAnimations() {
@@ -133,6 +172,7 @@ function animateCounters() {
   if (!counters.length) return;
 
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
   const run = (el) => {
     const target = Number(el.getAttribute("data-counter") || "0");
     if (!Number.isFinite(target)) return;
@@ -147,8 +187,7 @@ function animateCounters() {
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
-      const value = Math.round(target * eased);
-      el.textContent = String(value);
+      el.textContent = String(Math.round(target * eased));
       if (t < 1) requestAnimationFrame(tick);
     };
 
@@ -195,9 +234,7 @@ function setupLeadForm() {
       return;
     }
 
-    const text = getContextMessage({ name, phone, message });
-    const url = buildWhatsAppUrl(digits, text);
-
+    const url = buildWhatsAppUrl(digits, getContextMessage({ name, phone, message }));
     window.open(url, "_blank", "noopener,noreferrer");
     form.reset();
   });
@@ -206,24 +243,26 @@ function setupLeadForm() {
 function ensureValidConfig() {
   const digits = onlyDigits(CONFIG.whatsappNumber);
   const isPlaceholder = CONFIG.whatsappNumber.includes("X") || digits.length < 10;
-  if (isPlaceholder) {
-    // Mantém o site funcional, mas evita link quebrado: direciona para WhatsApp web.
-    // (Usuário deve ajustar CONFIG.whatsappNumber ao publicar.)
-    const fallback = "https://web.whatsapp.com/";
-    document.querySelectorAll("[data-whatsapp-link]").forEach((a) => {
-      a.setAttribute("href", fallback);
-      a.setAttribute("target", "_blank");
-      a.setAttribute("rel", "noopener noreferrer");
-    });
-  }
+  if (!isPlaceholder) return;
+
+  const fallback = "https://web.whatsapp.com/";
+  document.querySelectorAll("[data-whatsapp-link]").forEach((a) => {
+    a.setAttribute("href", fallback);
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener noreferrer");
+  });
 }
 
-setupYear();
-setupPhoneLinks();
-setupWhatsAppLinks();
-ensureValidConfig();
-setupMobileNav();
-setupRevealAnimations();
-animateCounters();
-setupLeadForm();
+function init() {
+  setupYear();
+  setupPhoneLinks();
+  setupWhatsAppLinks();
+  ensureValidConfig();
+  setupMobileNav();
+  setupActiveNavLink();
+  setupRevealAnimations();
+  animateCounters();
+  setupLeadForm();
+}
 
+init();
